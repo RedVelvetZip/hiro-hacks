@@ -10,3 +10,7 @@ To get the application running, follow these steps:
 2. Navigate into the directory: `cd hiro-hacks-template`
 3. Install the dependencies: `yarn install`
 4. Start the development server: `yarn dev`
+
+## Build a Friend.tech clone
+
+https://docs.hiro.so/hacks/build-a-friend-tech-clone 
