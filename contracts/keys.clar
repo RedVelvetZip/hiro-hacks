@@ -1,5 +1,5 @@
 ;; title: keys
-;; version:
+;; version: 0.1
 ;; summary: friend.tech key mgmt
 ;; description:
 
@@ -99,8 +99,28 @@
   (map-get? keysBalance { subject: subject, holder: holder})
 )
 
+(define-read-only (get-buy-price (subject principal) (amount uint))
+  (let
+    ((current-supply (default-to u0 (get-keys-supply subject))))
+    (let
+      ((new-supply (+ current-supply amount)))
+      (/ (* new-supply new-supply) u1000)
+    )
+  )
+)
 
-
+(define-read-only (get-sell-price (subject principal) (amount uint))
+  (let
+    ((current-supply (default-to u0 (get-keys-supply subject))))
+    (if (>= current-supply amount)
+      (let
+        ((new-supply (- current-supply amount)))
+        (/ (* new-supply new-supply) u1000) ;; TODO: 1000 was arbitrarily chosen as a divisor. Look at sats values and readjust
+      )
+      u0 ;; return 0 if the supply is less than the amount to sell
+    )
+  )
+)
 
 ;; private functions
 ;;
