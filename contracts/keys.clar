@@ -91,6 +91,17 @@
   (>= (default-to u0 (map-get? keysBalance { subject: subject, holder: holder })) u1)
 )
 
+(define-read-only (get-keys-supply (subject principal))
+  (map-get? keysSupply { subject: subject })
+)
+
+(define-read-only (get-keys-balance (subject principal) (holder principal))
+  (map-get? keysBalance { subject: subject, holder: holder})
+)
+
+
+
+
 ;; private functions
 ;;
 
