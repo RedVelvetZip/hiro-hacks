@@ -13,8 +13,8 @@
 ;;
 ;; constants
 (define-data-var protocolFeePercent uint u200) ;; Protocol Fee Percent, set to 2%
-;; (define-data-var subjectFeePercent (map principal uint) uint) ;; Subject-specific Fee Percent
 (define-data-var protocolFeeDestination principal tx-sender) ;; Destination for protocol fees
+(define-data-var contractOwner principal tx-sender)
 
 ;; data vars
 ;;
@@ -187,6 +187,29 @@
   )
 )
 
+;; owner-only functions
+;;
+(define-public (set-contract-owner (newOwner principal))
+  (begin
+    (if (is-eq tx-sender (var-get contractOwner))
+      (begin
+        (var-set contractOwner newOwner)
+        (ok true)
+      )
+      (err u1) ;; Unauthorized access
+    )
+  )
+)
+
+(define-public (set-protocol-fee-percent (feePercent uint))
+  (if (is-eq tx-sender (var-get contractOwner))
+    (begin
+      (var-set protocolFeePercent feePercent)
+      (ok true)
+    )
+    (err u1) ;; Unauthorized access
+  )
+)
 
 ;; read only functions
 ;;
