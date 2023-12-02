@@ -32,53 +32,76 @@
     (
       (supply (default-to u0 (map-get? keysSupply { subject: subject })))
       (price (get-price supply amount))
-      (protocolFee (var-get protocolFeePercent))
-      (subjectFee (default-to u0 (map-get? subjectFeePercent { subject: subject })))
-      (totalFee (+ (* price (/ protocolFee u10000)) (* price (/ subjectFee u10000))))
-      (totalCost (+ price totalFee))
+    ;;   (protocolFee (var-get protocolFeePercent))
+    ;;   (subjectFeePercent (default-to u0 (map-get? subjectFeePercent { subject: subject })))
+    ;;   (totalFee (+ (* price (/ protocolFee u10000)) (* price (/ subjectFee u10000))))
+    ;;   (totalCost (+ price totalFee))
     )
-    (if (or (> supply u0) (is-eq tx-sender subject))
-      (begin
-        ;; Transfer total cost from the buyer to the contract (or subject)
-        (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
-          success
-          (begin
-            ;; Distribute the fees
-            (match (stx-transfer? (* price (/ protocolFee u10000)) tx-sender (var-get protocolFeeDestination))
-              protocolFeeSuccess
-              (if (> subjectFee u0)
-                (match (stx-transfer? (* price (/ subjectFee u10000)) tx-sender subject)
-                  subjectFeeSuccess
-                  (begin
-                    ;; Update keys balance and supply
-                    (map-set keysBalance { subject: subject, holder: tx-sender }
-                      (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
-                    )
-                    (map-set keysSupply { subject: subject } (+ supply amount))
-                    (ok true)
-                  )
-                  subjectFeeError
-                  (err u3) ;; Handle subject fee transfer error
-                )
-                (begin
-                  ;; Update keys balance and supply
-                  (map-set keysBalance { subject: subject, holder: tx-sender }
-                    (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
-                  )
-                  (map-set keysSupply { subject: subject } (+ supply amount))
-                  (ok true)
-                )
-              )
-              protocolFeeError
-              (err u4) ;; Handle protocol fee transfer error
-            )
-          )
-          error
-          (err u2)
-        )
+    (let
+      (
+        (protocolFee (calculate-fee price (var-get protocolFeePercent)))
+        (subjectFee (calculate-fee price (default-to u0 (map-get? subjectFeePercent { subject: subject }))))
+        (totalCost (+ price protocolFee subjectFee))
       )
-      (err u1)
+      (if (or (> supply u0) (is-eq tx-sender subject))
+        (begin
+          ;; Transfer total cost from the buyer to the contract (or subject)
+          (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
+            success
+            (begin
+              ;; Distribute the fees
+              (distribute-fees protocolFee subjectFee subject)
+            )
+            error
+            (err u2) ;; Error in transferring total cost
+          )
+        )
+        (err u1) ;; Supply check failed
+      )
     )
+    ;;;;;;;;;;;;;;;;;
+    ;; (if (or (> supply u0) (is-eq tx-sender subject))
+    ;;   (begin
+    ;;     ;; Transfer total cost from the buyer to the contract (or subject)
+    ;;     (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
+    ;;       success
+    ;;       (begin
+    ;;         ;; Distribute the fees
+    ;;         (match (stx-transfer? (* price (/ protocolFee u10000)) tx-sender (var-get protocolFeeDestination))
+    ;;           protocolFeeSuccess
+    ;;           (if (> subjectFee u0)
+    ;;             (match (stx-transfer? (* price (/ subjectFee u10000)) tx-sender subject)
+    ;;               subjectFeeSuccess
+    ;;               (begin
+    ;;                 ;; Update keys balance and supply
+    ;;                 (map-set keysBalance { subject: subject, holder: tx-sender }
+    ;;                   (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
+    ;;                 )
+    ;;                 (map-set keysSupply { subject: subject } (+ supply amount))
+    ;;                 (ok true)
+    ;;               )
+    ;;               subjectFeeError
+    ;;               (err u3) ;; Handle subject fee transfer error
+    ;;             )
+    ;;             (begin
+    ;;               ;; Update keys balance and supply
+    ;;               (map-set keysBalance { subject: subject, holder: tx-sender }
+    ;;                 (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
+    ;;               )
+    ;;               (map-set keysSupply { subject: subject } (+ supply amount))
+    ;;               (ok true)
+    ;;             )
+    ;;           )
+    ;;           protocolFeeError
+    ;;           (err u4) ;; Handle protocol fee transfer error
+    ;;         )
+    ;;       )
+    ;;       error
+    ;;       (err u2)
+    ;;     )
+    ;;   )
+    ;;   (err u1)
+    ;; )
   )
 )
 
@@ -201,4 +224,44 @@
 
 ;; private functions
 ;;
+(define-private (calculate-fee (price uint) (feePercent uint))
+  (/ (* price feePercent) u10000)
+)
 
+(define-private (distribute-fees (protocolFee uint) (subjectFee uint) (subject principal) (amount uint))
+  (match (stx-transfer? protocolFee tx-sender (var-get protocolFeeDestination))
+    protocolFeeSuccess
+    (if (> subjectFee u0)
+      (match (stx-transfer? subjectFee tx-sender subject)
+        subjectFeeSuccess
+        (update-keys-balance-and-supply subject amount) ;; Corrected call with two arguments
+        subjectFeeError
+        (err u3) ;; Handle subject fee transfer error
+      )
+      (update-keys-balance-and-supply subject amount) ;; Corrected call with two arguments
+    )
+    protocolFeeError
+    (err u4) ;; Handle protocol fee transfer error
+  )
+)
+
+
+(define-private (update-keys-balance-and-supply (subject principal) (amount uint))
+  (let
+    (
+      (currentBalance (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })))
+      (newBalance (+ currentBalance amount))
+      (currentSupply (default-to u0 (map-get? keysSupply { subject: subject })))
+      (newSupply (+ currentSupply amount))
+    )
+    (begin
+      ;; Update the balance of the buyer in keysBalance map
+      (map-set keysBalance { subject: subject, holder: tx-sender } newBalance)
+
+      ;; Update the total supply of keys in keysSupply map
+      (map-set keysSupply { subject: subject } newSupply)
+
+      (ok true) ;; Return true to indicate successful update
+    )
+  )
+)
