@@ -1,10 +1,16 @@
 import React, { ReactElement, useState } from 'react';
-import { StacksMainnet } from '@stacks/network';
+import { StacksTestnet, StacksMainnet } from '@stacks/network';
 import {
   callReadOnlyFunction,
   getAddressFromPublicKey,
   uintCV,
-  cvToValue
+  cvToValue,
+  makeContractCall,
+  broadcastTransaction,
+  AnchorMode,
+  FungibleConditionCode,
+  makeStandardSTXPostCondition,
+  bufferCVFromString,
 } from '@stacks/transactions';
 import {
   AppConfig,
@@ -30,20 +36,24 @@ function App(): ReactElement {
   const appConfig = new AppConfig(['store_write', 'publish_data']);
   const userSession = new UserSession({ appConfig });
 
-  const message = 'Hello, Hiro Hacks!';
+  const message = 'Howdy, Hiro Hacks!';
   const network = new StacksMainnet();
+
+  const [keysAmount, setKeysAmount] = useState(0);
+  const _contractAddress = 'SP000000000000000000002Q6VF78';
+  const _contractName = 'keys';
 
   // Define your authentication options here
   const authOptions = {
     userSession,
     appDetails: {
-      name: 'My App',
+      name: 'Reds App',
       icon: 'src/favicon.svg'
     },
     onFinish: (data: FinishedAuthData) => {
       // Handle successful authentication here
       let userData = data.userSession.loadUserData();
-      setAddress(userData.profile.stxAddress.mainnet); // or .testnet for testnet
+      setAddress(userData.profile.stxAddress.testnet); // or .testnet for testnet, or .mainnet for mainnet
     },
     onCancel: () => {
       // Handle authentication cancellation here
@@ -111,17 +121,79 @@ function App(): ReactElement {
     }
   };
 
+  const buyKeys = async () => {
+    if (!userSession.isUserSignedIn()) {
+      console.log("User not signed in");
+      return;
+    }
+
+    const userData = userSession.loadUserData();
+    const senderKey = userData.profile.stxAddress.testnet;
+    const contractAddress = _contractAddress;
+    const contractName = _contractName;
+    const txOptions = {
+      contractAddress,
+      contractName,
+      functionName: 'buy-keys',
+      functionArgs: [bufferCVFromString(subject), uintCV(keysAmount)], //[contractPrincipalCV(subject), uintCV(keysAmount)] TODO: define subject
+      senderKey,
+      validateWithAbi: true,
+      network,
+      postConditions: [],
+      anchorMode: AnchorMode.Any,
+      onFinish: (data: { txId: any; }) => { //TODO: fix txId: any
+          console.log('Transaction ID:', data.txId);
+          console.log('Finished buying keys');
+      },
+    };
+
+    try {
+      await makeContractCall(txOptions);
+    } catch (error) {
+      console.error('Error buying keys:', error);
+    }
+  };
+
+  // const sellKeys = async () => {
+  //   if (!userSession.isUserSignedIn()) {
+  //     console.log("User not signed in");
+  //     return;
+  //   }
+
+  //   const userData = userSession.loadUserData();
+  //   const senderAddress = userData.profile.stxAddress.testnet;
+  //   const contractAddress = _contractAddress;
+  //   const contractName = _contractName;
+
+  //   try {
+  //     await makeContractCall({
+  //       network,
+  //       contractAddress,
+  //       contractName,
+  //       functionName: 'sell-keys',
+  //       functionArgs: [contractPrincipalCV(subject), uintCV(keysAmount)],
+  //       senderAddress,
+  //       postConditions: [],
+  //       onFinish: (data) => {
+  //         console.log('Transaction ID:', data.txId);
+  //         console.log('Finished selling keys');
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error selling keys:', error);
+  //   }
+  // };
+
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="mx-auto max-w-2xl px-4">
         <div className="rounded-lg border bg-background p-8">
-          <h1 className="mb-2 text-lg font-semibold">Welcome to Hiro Hacks!</h1>
+          <h1 className="mb-2 text-lg font-semibold">Welcome to Red's Hiro Hacks project!</h1>
           <p className="leading-normal text-muted-foreground">
-            This is an open source starter template built with{' '}
+            This webapp is based on an open source starter template:{' '}
             <ExternalLink href="https://docs.hiro.so/stacks.js/overview">
               Stacks.js
             </ExternalLink>{' '}
-            and a few integrations to help kickstart your app:
           </p>
 
           <div className="mt-4 flex flex-col items-start space-y-2">
@@ -188,6 +260,16 @@ function App(): ReactElement {
                 </Button>
               </div>
             )}
+            <div>
+              <input
+                type="number"
+                value={keysAmount}
+                onChange={(e) => setKeysAmount(Number(e.target.value))}
+                placeholder="Enter amount of keys"
+              />
+              <Button onClick={buyKeys}>Buy Keys</Button>
+              {/* <Button onClick={sellKeys}>Sell Keys</Button> */}
+            </div>
           </div>
         </div>
       </div>
