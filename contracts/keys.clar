@@ -32,76 +32,21 @@
     (
       (supply (default-to u0 (map-get? keysSupply { subject: subject })))
       (price (get-price supply amount))
-    ;;   (protocolFee (var-get protocolFeePercent))
-    ;;   (subjectFeePercent (default-to u0 (map-get? subjectFeePercent { subject: subject })))
-    ;;   (totalFee (+ (* price (/ protocolFee u10000)) (* price (/ subjectFee u10000))))
-    ;;   (totalCost (+ price totalFee))
+      (protocolFee (calculate-fee price (var-get protocolFeePercent)))
+      (subjectFee (calculate-fee price (default-to u0 (map-get? subjectFeePercent { subject: subject }))))
+      (totalCost (+ price protocolFee subjectFee))
     )
-    (let
-      (
-        (protocolFee (calculate-fee price (var-get protocolFeePercent)))
-        (subjectFee (calculate-fee price (default-to u0 (map-get? subjectFeePercent { subject: subject }))))
-        (totalCost (+ price protocolFee subjectFee))
-      )
-      (if (or (> supply u0) (is-eq tx-sender subject))
-        (begin
-          ;; Transfer total cost from the buyer to the contract (or subject)
-          (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
-            success
-            (begin
-              ;; Distribute the fees
-              (distribute-fees protocolFee subjectFee subject)
-            )
-            error
-            (err u2) ;; Error in transferring total cost
-          )
+    (if (or (> supply u0) (is-eq tx-sender subject))
+      (begin
+        (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
+          success
+          (distribute-fees protocolFee subjectFee subject amount)
+          error
+          (err u2)
         )
-        (err u1) ;; Supply check failed
       )
+      (err u1)
     )
-    ;;;;;;;;;;;;;;;;;
-    ;; (if (or (> supply u0) (is-eq tx-sender subject))
-    ;;   (begin
-    ;;     ;; Transfer total cost from the buyer to the contract (or subject)
-    ;;     (match (stx-transfer? totalCost tx-sender (as-contract tx-sender))
-    ;;       success
-    ;;       (begin
-    ;;         ;; Distribute the fees
-    ;;         (match (stx-transfer? (* price (/ protocolFee u10000)) tx-sender (var-get protocolFeeDestination))
-    ;;           protocolFeeSuccess
-    ;;           (if (> subjectFee u0)
-    ;;             (match (stx-transfer? (* price (/ subjectFee u10000)) tx-sender subject)
-    ;;               subjectFeeSuccess
-    ;;               (begin
-    ;;                 ;; Update keys balance and supply
-    ;;                 (map-set keysBalance { subject: subject, holder: tx-sender }
-    ;;                   (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
-    ;;                 )
-    ;;                 (map-set keysSupply { subject: subject } (+ supply amount))
-    ;;                 (ok true)
-    ;;               )
-    ;;               subjectFeeError
-    ;;               (err u3) ;; Handle subject fee transfer error
-    ;;             )
-    ;;             (begin
-    ;;               ;; Update keys balance and supply
-    ;;               (map-set keysBalance { subject: subject, holder: tx-sender }
-    ;;                 (+ (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })) amount)
-    ;;               )
-    ;;               (map-set keysSupply { subject: subject } (+ supply amount))
-    ;;               (ok true)
-    ;;             )
-    ;;           )
-    ;;           protocolFeeError
-    ;;           (err u4) ;; Handle protocol fee transfer error
-    ;;         )
-    ;;       )
-    ;;       error
-    ;;       (err u2)
-    ;;     )
-    ;;   )
-    ;;   (err u1)
-    ;; )
   )
 )
 
@@ -111,44 +56,24 @@
       (balance (default-to u0 (map-get? keysBalance { subject: subject, holder: tx-sender })))
       (supply (default-to u0 (map-get? keysSupply { subject: subject })))
       (price (get-price supply amount))
-      (protocolFee (var-get protocolFeePercent))
-      (subjectFee (default-to u0 (map-get? subjectFeePercent { subject: subject })))
-      (totalFee (+ (* price (/ protocolFee u10000)) (* price (/ subjectFee u10000))))
-      (totalCost (+ price totalFee))
-      (recipient tx-sender)
+      (protocolFee (calculate-fee price (var-get protocolFeePercent)))
+      (subjectFee (calculate-fee price (default-to u0 (map-get? subjectFeePercent { subject: subject }))))
+      (totalCost (+ price protocolFee subjectFee))
     )
     (if (and (>= balance amount) (or (> supply u0) (is-eq tx-sender subject)))
       (begin
-        ;; Transfer total cost from the contract (or subject) to the seller
         (match (as-contract (stx-transfer? totalCost (var-get protocolFeeDestination) tx-sender))
-          protocolFeeSuccess
-          (if (> subjectFee u0)
-            (match (as-contract (stx-transfer? totalCost subject tx-sender))
-              subjectFeeSuccess
-              (begin
-                ;; Update keys balance and supply
-                (map-set keysBalance { subject: subject, holder: tx-sender } (- balance amount))
-                (map-set keysSupply { subject: subject } (- supply amount))
-                (ok true)
-              )
-              subjectFeeError
-              (err u3) ;; Handle subject fee transfer error
-            )
-            (begin
-              ;; Update keys balance and supply
-              (map-set keysBalance { subject: subject, holder: tx-sender } (- balance amount))
-              (map-set keysSupply { subject: subject } (- supply amount))
-              (ok true)
-            )
-          )
-          protocolFeeError
-          (err u4) ;; Handle protocol fee transfer error
+          success
+          (distribute-fees protocolFee subjectFee subject amount)
+          error
+          (err u4)
         )
       )
       (err u1)
     )
   )
 )
+
 
 ;; owner-only functions
 ;;
@@ -244,7 +169,6 @@
     (err u4) ;; Handle protocol fee transfer error
   )
 )
-
 
 (define-private (update-keys-balance-and-supply (subject principal) (amount uint))
   (let
