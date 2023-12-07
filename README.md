@@ -12,5 +12,8 @@ To get the application running, follow these steps:
 4. Start the development server: `yarn dev`
 
 ## Build a Friend.tech clone
+Work In Progress
 
 https://docs.hiro.so/hacks/build-a-friend-tech-clone 
+
+contracts/keys.clar contains the file
