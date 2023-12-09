@@ -5,9 +5,18 @@ authors = []
 telemetry = true
 cache_dir = '.\.cache'
 requirements = []
+[contracts.extension-trait]
+path = 'contracts/extension-trait.clar'
+clarity_version = 2
+epoch = 2.4
 
 [contracts.keys]
 path = 'contracts/keys.clar'
+clarity_version = 2
+epoch = 2.4
+
+[contracts.proposal-trait]
+path = 'contracts/proposal-trait.clar'
 clarity_version = 2
 epoch = 2.4
 [repl.analysis]
